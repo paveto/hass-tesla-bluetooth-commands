@@ -4,6 +4,14 @@ Home Assistant integration for sending local commands to Tesla vehicles over Blu
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=paveto&repository=hass-tesla-bluetooth-commands)
 
+## Installation
+
+Add `https://github.com/paveto/hass-tesla-bluetooth-commands` as a custom
+integration repository in HACS and install **Tesla Local HA Commands**. The
+integration is stored directly in `custom_components/tesla_bluetooth`, so a
+GitHub release is not required. Restart Home Assistant after installation or
+updating.
+
 ## Important Notice
 
 This integration will keep your vehicle awake constantly while connected. If you want your vehicle to sleep, I recommend creating an automation to enable and disable the included "polling" switch.
