@@ -2309,6 +2309,9 @@ temescal==0.5
 # homeassistant.components.temper
 temperusb==1.6.1
 
+# homeassistant.components.tesla_bluetooth
+tesla-fleet-api==1.3.0
+
 # homeassistant.components.tesla_fleet
 # homeassistant.components.teslemetry
 # homeassistant.components.tessie

@@ -1,8 +1,8 @@
-# Tesla Bluetooth
+# Tesla Local HA Commands
 
-Home Assistant integration for communicating with Tesla vehicles over BLE
+Home Assistant integration for sending local commands to Tesla vehicles over Bluetooth Low Energy (BLE).
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Teslemetry&repository=hass-tesla-bluetooth)
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=paveto&repository=hass-tesla-bluetooth-commands)
 
 ## Important Notice
 
@@ -11,6 +11,17 @@ This integration will keep your vehicle awake constantly while connected. If you
 The recommended logic is:
 - Trigger status is On: Switch Polling On
 - Trigger sentry mode, charging, user present, where all are off: Switch Polling Off
+
+## Unlocking the charge cable
+
+The integration provides an **Unlock charge cable** button entity. Pressing it
+sends Tesla's local `charge_port_door_open` command over BLE. When a charging
+cable is connected, the same command releases the charge-port latch so the
+cable can be removed.
+
+You can call this button from a Home Assistant automation connected to a
+physical button on the charging handle. Keep the Bluetooth adapter or proxy
+close enough to the vehicle for the command to connect reliably.
 
 ## Limitations
 

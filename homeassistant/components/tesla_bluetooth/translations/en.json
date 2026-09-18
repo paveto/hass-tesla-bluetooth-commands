@@ -130,6 +130,9 @@
             }
         },
         "button": {
+            "unlock_charge_cable": {
+                "name": "Unlock charge cable"
+            },
             "boombox": {
                 "name": "Play fart"
             },

@@ -27,6 +27,7 @@ type TeslaBluetoothConfigEntry = ConfigEntry[TeslaBluetoothData]
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 PLATFORMS: Final = [
     Platform.BINARY_SENSOR,
+    Platform.BUTTON,
     Platform.NUMBER,
     Platform.SWITCH,
 ]  # Platform.SENSOR
