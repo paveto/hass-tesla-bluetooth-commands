@@ -6,21 +6,33 @@ from abc import abstractmethod
 from datetime import timedelta
 from typing import TYPE_CHECKING, Generic, TypeVar
 
+from tesla_fleet_api.exceptions import TeslaFleetError
 from tesla_fleet_api.tesla.bluetooth import toDict
 from tesla_fleet_api.tesla.vehicle.bluetooth import (
+    AlertState,
     ChargeScheduleState,
     ChargeState,
+    ChildPresenceDetectionState,
     ClimateState,
     ClosuresState,
+    DisplayState,
     DriveState,
+    GuiSettings,
+    LightShowState,
     LocationState,
     MediaDetailState,
     MediaState,
     ParentalControlsState,
+    ParkedAccessoryState,
     PreconditioningScheduleState,
     SoftwareUpdateState,
+    SohState,
+    SuspensionState,
     TirePressureState,
     VehicleBluetooth,
+    VehicleConfig,
+    VehicleDetailState,
+    VehicleState,
     VehicleStatus,
 )
 
@@ -54,6 +66,17 @@ class TesleBluetoothCoordinators:
     media_detail: TeslaBluetoothMediaDetailCoordinator
     software_update: TeslaBluetoothSoftwareUpdateCoordinator
     parental_controls: TeslaBluetoothParentalControlsCoordinator
+    gui_settings: TeslaBluetoothGuiSettingsCoordinator
+    parked_accessory: TeslaBluetoothParkedAccessoryCoordinator
+    legacy_vehicle: TeslaBluetoothLegacyVehicleCoordinator
+    vehicle_config: TeslaBluetoothVehicleConfigCoordinator
+    soh: TeslaBluetoothSohCoordinator
+    vehicle_detail: TeslaBluetoothVehicleDetailCoordinator
+    display: TeslaBluetoothDisplayCoordinator
+    alert: TeslaBluetoothAlertCoordinator
+    light_show: TeslaBluetoothLightShowCoordinator
+    suspension: TeslaBluetoothSuspensionCoordinator
+    child_presence: TeslaBluetoothChildPresenceCoordinator
 
     def __init__(
         self,
@@ -87,41 +110,49 @@ class TesleBluetoothCoordinators:
         self.parental_controls = TeslaBluetoothParentalControlsCoordinator(
             hass, entry, vehicle, self
         )
+        self.gui_settings = TeslaBluetoothGuiSettingsCoordinator(
+            hass, entry, vehicle, self
+        )
+        self.parked_accessory = TeslaBluetoothParkedAccessoryCoordinator(
+            hass, entry, vehicle, self
+        )
+        self.legacy_vehicle = TeslaBluetoothLegacyVehicleCoordinator(
+            hass, entry, vehicle, self
+        )
+        self.vehicle_config = TeslaBluetoothVehicleConfigCoordinator(
+            hass, entry, vehicle, self
+        )
+        self.soh = TeslaBluetoothSohCoordinator(hass, entry, vehicle, self)
+        self.vehicle_detail = TeslaBluetoothVehicleDetailCoordinator(
+            hass, entry, vehicle, self
+        )
+        self.display = TeslaBluetoothDisplayCoordinator(hass, entry, vehicle, self)
+        self.alert = TeslaBluetoothAlertCoordinator(hass, entry, vehicle, self)
+        self.light_show = TeslaBluetoothLightShowCoordinator(hass, entry, vehicle, self)
+        self.suspension = TeslaBluetoothSuspensionCoordinator(
+            hass, entry, vehicle, self
+        )
+        self.child_presence = TeslaBluetoothChildPresenceCoordinator(
+            hass, entry, vehicle, self
+        )
+        self.polling_enabled = False
 
     def __iter__(self):
         """Iterate through coordinators."""
         for attr_name in self.__annotations__:
             yield getattr(self, attr_name)
 
-    def turn_on(self):
+    def turn_on(self) -> None:
         """Turn on the coordinator."""
-        self.charge.turn_on()
-        self.climate.turn_on()
-        self.closures.turn_on()
-        self.drive.turn_on()
-        self.location.turn_on()
-        self.charge_schedule.turn_on()
-        self.preconditioning_schedule.turn_on()
-        self.tire_pressure.turn_on()
-        self.media.turn_on()
-        self.media_detail.turn_on()
-        self.software_update.turn_on()
-        self.parental_controls.turn_on()
+        self.polling_enabled = True
+        for coordinator in self:
+            coordinator.turn_on()
 
-    def turn_off(self):
+    def turn_off(self) -> None:
         """Turn off the coordinator."""
-        self.charge.turn_off()
-        self.climate.turn_off()
-        self.closures.turn_off()
-        self.drive.turn_off()
-        self.location.turn_off()
-        self.charge_schedule.turn_off()
-        self.preconditioning_schedule.turn_off()
-        self.tire_pressure.turn_off()
-        self.media.turn_off()
-        self.media_detail.turn_off()
-        self.software_update.turn_off()
-        self.parental_controls.turn_off()
+        self.polling_enabled = False
+        for coordinator in self:
+            coordinator.turn_off()
 
 
 class TeslaBluetoothCoordinator(TimestampDataUpdateCoordinator[_T], Generic[_T]):
@@ -146,14 +177,14 @@ class TeslaBluetoothCoordinator(TimestampDataUpdateCoordinator[_T], Generic[_T])
             LOGGER,
             config_entry=entry,
             name=f"Tesla Bluetooth {self.kind} Coordinator",
-            update_interval=timedelta(seconds=DEFAULT_SCAN_INTERVAL),
+            # Polling is opt-in so installing or restarting Home Assistant does
+            # not wake the car or keep a BLE connection alive.
+            update_interval=None,
         )
 
     async def _async_update_data(self) -> _T:
         """Get data from Tesla Bluetooth."""
-        LOGGER.info(
-            f"Updating {self.kind} data. Connected: {self.vehicle.client.is_connected}"
-        )
+        LOGGER.debug("Updating %s data", self.kind)
 
         # if not self.vehicle.client.is_connected:
         # await self.vehicle.connect()
@@ -166,7 +197,7 @@ class TeslaBluetoothCoordinator(TimestampDataUpdateCoordinator[_T], Generic[_T])
         try:
             await self.vehicle.connect_if_needed()
             data = await self._async_update_function(self.vehicle)
-        except Exception as err:
+        except (TeslaFleetError, Exception) as err:
             raise UpdateFailed(f"Unable to fetch data: {err}") from err
         if data:
             LOGGER.info(f"Updated {self.kind} data {toDict(data)}")
@@ -176,12 +207,14 @@ class TeslaBluetoothCoordinator(TimestampDataUpdateCoordinator[_T], Generic[_T])
     async def _async_update_function(self, vehicle: VehicleBluetooth) -> _T:
         """Abstract method to fetch specific data from the vehicle."""
 
-    def turn_on(self):
+    def turn_on(self) -> None:
         """Turn on polling."""
+        self.update_interval = timedelta(seconds=DEFAULT_SCAN_INTERVAL)
         self._schedule_refresh()
 
-    def turn_off(self):
+    def turn_off(self) -> None:
         """Turn off polling."""
+        self.update_interval = None
         self._unschedule_refresh()
 
 
@@ -336,3 +369,116 @@ class TeslaBluetoothParentalControlsCoordinator(
     ) -> ParentalControlsState:
         """Get vehicle parental controls state data."""
         return await vehicle.parental_controls_state()
+
+
+class TeslaBluetoothGuiSettingsCoordinator(TeslaBluetoothCoordinator[GuiSettings]):
+    """Coordinator for GUI settings data."""
+
+    kind = "GUI Settings"
+
+    async def _async_update_function(self, vehicle: VehicleBluetooth) -> GuiSettings:
+        return await vehicle.gui_settings()
+
+
+class TeslaBluetoothParkedAccessoryCoordinator(
+    TeslaBluetoothCoordinator[ParkedAccessoryState]
+):
+    """Coordinator for parked accessory data."""
+
+    kind = "Parked Accessory"
+
+    async def _async_update_function(
+        self, vehicle: VehicleBluetooth
+    ) -> ParkedAccessoryState:
+        return await vehicle.parked_accessory_state()
+
+
+class TeslaBluetoothLegacyVehicleCoordinator(TeslaBluetoothCoordinator[VehicleState]):
+    """Coordinator for legacy vehicle-state data."""
+
+    kind = "Legacy Vehicle"
+
+    async def _async_update_function(self, vehicle: VehicleBluetooth) -> VehicleState:
+        return await vehicle.legacy_vehicle_state()
+
+
+class TeslaBluetoothVehicleConfigCoordinator(TeslaBluetoothCoordinator[VehicleConfig]):
+    """Coordinator for vehicle configuration data."""
+
+    kind = "Vehicle Config"
+
+    async def _async_update_function(self, vehicle: VehicleBluetooth) -> VehicleConfig:
+        return await vehicle.vehicle_config()
+
+
+class TeslaBluetoothSohCoordinator(TeslaBluetoothCoordinator[SohState]):
+    """Coordinator for battery state-of-health data."""
+
+    kind = "State Of Health"
+
+    async def _async_update_function(self, vehicle: VehicleBluetooth) -> SohState:
+        return await vehicle.soh_state()
+
+
+class TeslaBluetoothVehicleDetailCoordinator(
+    TeslaBluetoothCoordinator[VehicleDetailState]
+):
+    """Coordinator for detailed vehicle data."""
+
+    kind = "Vehicle Detail"
+
+    async def _async_update_function(
+        self, vehicle: VehicleBluetooth
+    ) -> VehicleDetailState:
+        return await vehicle.vehicle_detail_state()
+
+
+class TeslaBluetoothDisplayCoordinator(TeslaBluetoothCoordinator[DisplayState]):
+    """Coordinator for display data."""
+
+    kind = "Display"
+
+    async def _async_update_function(self, vehicle: VehicleBluetooth) -> DisplayState:
+        return await vehicle.display_state()
+
+
+class TeslaBluetoothAlertCoordinator(TeslaBluetoothCoordinator[AlertState]):
+    """Coordinator for alert data."""
+
+    kind = "Alert"
+
+    async def _async_update_function(self, vehicle: VehicleBluetooth) -> AlertState:
+        return await vehicle.alert_state()
+
+
+class TeslaBluetoothLightShowCoordinator(TeslaBluetoothCoordinator[LightShowState]):
+    """Coordinator for light-show data."""
+
+    kind = "Light Show"
+
+    async def _async_update_function(self, vehicle: VehicleBluetooth) -> LightShowState:
+        return await vehicle.light_show_state()
+
+
+class TeslaBluetoothSuspensionCoordinator(TeslaBluetoothCoordinator[SuspensionState]):
+    """Coordinator for suspension data."""
+
+    kind = "Suspension"
+
+    async def _async_update_function(
+        self, vehicle: VehicleBluetooth
+    ) -> SuspensionState:
+        return await vehicle.suspension_state()
+
+
+class TeslaBluetoothChildPresenceCoordinator(
+    TeslaBluetoothCoordinator[ChildPresenceDetectionState]
+):
+    """Coordinator for child-presence detection data."""
+
+    kind = "Child Presence"
+
+    async def _async_update_function(
+        self, vehicle: VehicleBluetooth
+    ) -> ChildPresenceDetectionState:
+        return await vehicle.child_presence_detection_state()

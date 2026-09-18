@@ -32,7 +32,8 @@ async def async_get_config_entry_diagnostics(
 
     # Return only the relevant children
     return {
-        "connected": bool(vehicle.client.is_connected),
+        "connected": bool(vehicle.client and vehicle.client.is_connected),
+        "polling_enabled": coordinators.polling_enabled,
         "coordinators": {
             x.kind: {
                 "data": async_redact_data(toDict(x.data), REDACT) if x.data else None,

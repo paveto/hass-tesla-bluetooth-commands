@@ -12,13 +12,13 @@ integration is stored directly in `custom_components/tesla_bluetooth`, so a
 GitHub release is not required. Restart Home Assistant after installation or
 updating.
 
-## Important Notice
+## Sleep-first operation
 
-This integration will keep your vehicle awake constantly while connected. If you want your vehicle to sleep, I recommend creating an automation to enable and disable the included "polling" switch.
-
-The recommended logic is:
-- Trigger status is On: Switch Polling On
-- Trigger sentry mode, charging, user present, where all are off: Switch Polling Off
+Data polling and BLE keepalive are disabled by default, so installing or
+restarting the integration does not keep the vehicle awake. Buttons connect on
+demand, send one local command, and disconnect again. The **Data polling**
+switch can be enabled when live sensors are needed; while it is enabled, regular
+Bluetooth requests can prevent the vehicle from sleeping.
 
 ## Unlocking the charge cable
 
@@ -30,6 +30,21 @@ cable can be removed.
 You can call this button from a Home Assistant automation connected to a
 physical button on the charging handle. Keep the Bluetooth adapter or proxy
 close enough to the vehicle for the command to connect reliably.
+
+## Commands and sensors
+
+The integration uses `tesla-fleet-api` 1.14.0. Every useful command that needs
+no value is exposed as a button, including locks, doors, charging, climate,
+lights, horn, media, dashcam, tonneau and maintenance actions. Potentially
+destructive or security-sensitive buttons are disabled by default and must be
+enabled explicitly in Home Assistant's entity registry.
+
+Every top-level field from all Bluetooth data endpoints is exposed as a
+diagnostic sensor. This includes the new GUI settings, parked accessory,
+vehicle configuration and detail, battery health, display, alerts, light show,
+suspension and child-presence endpoints. These model-specific sensors are
+disabled by default; enable only the ones you need, then turn on **Data
+polling**.
 
 ## Limitations
 

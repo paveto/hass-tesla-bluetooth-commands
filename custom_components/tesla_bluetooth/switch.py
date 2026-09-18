@@ -143,15 +143,21 @@ class TeslaBluetoothClimateSwitchEntity(TeslaBluetoothClimateEntity, SwitchEntit
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on the Switch."""
-        await self.wake_up_if_asleep()
-        await handle_vehicle_command(self.entity_description.on_func(self.vehicle))
+        await handle_vehicle_command(
+            self.entity_description.on_func(self.vehicle),
+            vehicle=self.vehicle,
+            disconnect_after=not self.coordinators.polling_enabled,
+        )
         self._attr_is_on = True
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the Switch."""
-        await self.wake_up_if_asleep()
-        await handle_vehicle_command(self.entity_description.off_func(self.vehicle))
+        await handle_vehicle_command(
+            self.entity_description.off_func(self.vehicle),
+            vehicle=self.vehicle,
+            disconnect_after=not self.coordinators.polling_enabled,
+        )
         self._attr_is_on = False
         self.async_write_ha_state()
 
@@ -177,15 +183,21 @@ class TeslaBluetoothChargeSwitchEntity(TeslaBluetoothChargeEntity, SwitchEntity)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on the Switch."""
-        await self.wake_up_if_asleep()
-        await handle_vehicle_command(self.entity_description.on_func(self.vehicle))
+        await handle_vehicle_command(
+            self.entity_description.on_func(self.vehicle),
+            vehicle=self.vehicle,
+            disconnect_after=not self.coordinators.polling_enabled,
+        )
         self._attr_is_on = True
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the Switch."""
-        await self.wake_up_if_asleep()
-        await handle_vehicle_command(self.entity_description.off_func(self.vehicle))
+        await handle_vehicle_command(
+            self.entity_description.off_func(self.vehicle),
+            vehicle=self.vehicle,
+            disconnect_after=not self.coordinators.polling_enabled,
+        )
         self._attr_is_on = False
         self.async_write_ha_state()
 
@@ -199,6 +211,7 @@ class TeslaBluetoothPollingSwitchEntity(SwitchEntity, RestoreEntity):
     ) -> None:
         """Initialize the Switch."""
         self.coordinators = data.coordinators
+        self.vehicle = data.vehicle
         self._attr_translation_key = "polling"
         self._attr_unique_id = f"{data.vehicle.vin}-polling"
         self._attr_device_class = SwitchDeviceClass.SWITCH
@@ -209,8 +222,12 @@ class TeslaBluetoothPollingSwitchEntity(SwitchEntity, RestoreEntity):
         if (state := await self.async_get_last_state()) is not None:
             self._attr_is_on = state.state == STATE_ON
         else:
-            self._attr_is_on = True
-        if not self._attr_is_on:
+            # Sleep-first default: users explicitly opt in to continuous data
+            # polling when they need live sensors.
+            self._attr_is_on = False
+        if self._attr_is_on:
+            self.coordinators.turn_on()
+        else:
             self.coordinators.turn_off()
 
     async def async_turn_on(self, **kwargs: Any) -> None:
@@ -222,5 +239,6 @@ class TeslaBluetoothPollingSwitchEntity(SwitchEntity, RestoreEntity):
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the Switch."""
         self.coordinators.turn_off()
+        await self.vehicle.disconnect()
         self._attr_is_on = False
         self.async_write_ha_state()

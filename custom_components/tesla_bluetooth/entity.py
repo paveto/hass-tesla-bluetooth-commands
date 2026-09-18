@@ -41,7 +41,9 @@ class TeslaBluetoothEntity(CoordinatorEntity[_C], Generic[_C]):
     @property
     def available(self) -> bool:
         """Return if sensor is available."""
-        return self.vehicle.client.is_connected
+        return (
+            self.coordinator.data is not None and self.coordinator.last_update_success
+        )
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
@@ -56,8 +58,9 @@ class TeslaBluetoothEntity(CoordinatorEntity[_C], Generic[_C]):
     @property
     def awake(self) -> bool:
         """Return if the vehicle is asleep."""
-        return (
-            self.coordinators.state.data.vehicleSleepStatus == 1
+        return bool(
+            self.coordinators.state.data
+            and self.coordinators.state.data.vehicleSleepStatus == 1
         )  # VEHICLE_SLEEP_STATUS_AWAKE
 
     async def wake_up_if_asleep(self) -> None:

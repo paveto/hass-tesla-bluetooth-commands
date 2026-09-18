@@ -2,7 +2,6 @@
 
 from typing import Final
 
-from bleak.exc import BleakError
 from bleak_retry_connector import close_stale_connections_by_address
 from tesla_fleet_api.tesla.bluetooth import TeslaBluetooth
 from tesla_fleet_api.tesla.vehicle.vehicles import VehicleBluetooth
@@ -29,8 +28,9 @@ PLATFORMS: Final = [
     Platform.BINARY_SENSOR,
     Platform.BUTTON,
     Platform.NUMBER,
+    Platform.SENSOR,
     Platform.SWITCH,
-]  # Platform.SENSOR
+]
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -48,7 +48,12 @@ async def async_setup_entry(
     """Set up the Tesla Bluetooth configuration."""
 
     parent: TeslaBluetooth = hass.data[DOMAIN]
-    vehicle: VehicleBluetooth = parent.vehicles.createBluetooth(entry.data["vin"])
+    # Never keep an idle BLE link alive. A held connection prevents the vehicle
+    # from reaching its lowest-power sleep state.
+    vehicle: VehicleBluetooth = parent.vehicles.createBluetooth(
+        entry.data["vin"],
+        keepalive_interval=None,
+    )
 
     address = entry.data["address"]
     await close_stale_connections_by_address(address)
@@ -66,23 +71,7 @@ async def async_setup_entry(
         )
     vehicle.set_device(ble_device)
 
-    try:
-        await vehicle.connect(max_attempts=10)
-    except BleakError as e:
-        raise ConfigEntryNotReady(f"Failed to connect to Tesla vehicle: {e}") from e
-
     coordinators = TesleBluetoothCoordinators(hass, entry, vehicle)
-    await coordinators.state.async_config_entry_first_refresh()
-    # Force the state coordinator to update even without entities
-    coordinators.state.async_add_listener(lambda *_: None)
-
-    # Wake up the vehicle if it is asleep
-    if coordinators.state.data.vehicleSleepStatus != 1:
-        try:
-            await vehicle.wake_up()
-        except TimeoutError:
-            LOGGER.warning("Failed to wake up Tesla vehicle")
-
     entry.runtime_data = TeslaBluetoothData(vehicle, coordinators)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True

@@ -110,7 +110,10 @@ class TeslaBluetoothChargeNumberEntity(TeslaBluetoothChargeEntity, NumberEntity)
     async def async_set_native_value(self, value: float) -> None:
         """Set new value."""
         value = int(value)
-        await self.wake_up_if_asleep()
-        await handle_vehicle_command(self.entity_description.func(self.vehicle, value))
+        await handle_vehicle_command(
+            self.entity_description.func(self.vehicle, value),
+            vehicle=self.vehicle,
+            disconnect_after=not self.coordinators.polling_enabled,
+        )
         self._attr_native_value = value
         self.async_write_ha_state()

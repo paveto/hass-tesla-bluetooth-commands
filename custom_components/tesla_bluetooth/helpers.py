@@ -1,18 +1,26 @@
 """Tesla Bluetooth helper functions."""
 
 from collections.abc import Awaitable
+from typing import Any
 
+from bleak.exc import BleakError
 from tesla_fleet_api.exceptions import TeslaFleetError
+from tesla_fleet_api.tesla.vehicle.bluetooth import VehicleBluetooth
 
 from homeassistant.exceptions import HomeAssistantError
 
-from .const import DOMAIN
+from .const import DOMAIN, LOGGER
 
 
-async def handle_vehicle_command(command: Awaitable) -> bool:
+async def handle_vehicle_command(
+    command: Awaitable,
+    *,
+    vehicle: VehicleBluetooth | None = None,
+    disconnect_after: bool = False,
+) -> bool:
     """Handle a vehicle command."""
     try:
-        result = await command
+        result: dict[str, Any] = await command
     except TimeoutError as e:
         raise HomeAssistantError(
             translation_domain=DOMAIN,
@@ -24,6 +32,12 @@ async def handle_vehicle_command(command: Awaitable) -> bool:
             translation_key="command_failed",
             translation_placeholders={"message": e.message},
         ) from e
+    finally:
+        if disconnect_after and vehicle is not None:
+            try:
+                await vehicle.disconnect()
+            except (BleakError, TimeoutError) as err:
+                LOGGER.debug("Failed to disconnect idle BLE link: %s", err)
     if (response := result.get("response")) is None:
         if error := result.get("error"):
             # No response with error

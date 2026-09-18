@@ -164,6 +164,7 @@ class TeslaBluetoothConfigFlow(ConfigFlow, domain=DOMAIN):
                 self._vehicle = self._interface.vehicles.createBluetooth(
                     vin=vin,
                     device=self._discovered_device.device,
+                    keepalive_interval=None,
                 )
                 await self._vehicle.connect()
                 return await self.async_step_check()
@@ -221,14 +222,13 @@ class TeslaBluetoothConfigFlow(ConfigFlow, domain=DOMAIN):
 
         assert self._vehicle is not None
 
-        for i in range(10):
-            LOGGER.debug("Attempt %s to pair vehicle", i + 1)
-            try:
-                await self._vehicle.pair()
-                return await self.async_step_check()
-            # Make this more specific
-            except TeslaFleetError as err:
-                LOGGER.error("Failed to pair vehicle: %s", err)
+        try:
+            # v1.14 handles the authorization polling internally for up to five
+            # minutes, so retrying the whole pairing operation is unnecessary.
+            await self._vehicle.pair()
+            return await self.async_step_check()
+        except TeslaFleetError as err:
+            LOGGER.error("Failed to pair vehicle: %s", err)
 
         return self.async_show_form(step_id="instructions", errors={"base": "timeout"})
 
